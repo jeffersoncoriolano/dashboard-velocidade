@@ -30,10 +30,7 @@ equipamentos_validos = equipamentos_df[
 
 if equipamentos_validos.empty:
     st.error("Nenhum equipamento válido com latitude/longitude diferente de zero encontrado!")
-    # Você pode definir um centro padrão para Macaé se quiser mostrar um mapa vazio:
-    # macae_center = [-22.3763, -41.7848]
-    # m = folium.Map(location=macae_center, zoom_start=12)
-    # st_folium(m, height=500, width=900)
+
 else:
     # Calcular o centro correto
     map_center = [
@@ -47,7 +44,7 @@ m = folium.Map(location=map_center, zoom_start=12)
 mapa_id_por_nome = {}
 
 for _, row in equipamentos_validos.iterrows():
-    popup_text = f"{row['nome_processador']}<br>{row['id']}"
+    popup_text = f"Nome:{row['nome_processador']}<br>ID: {row['id']}"
     # Cria ícone personalizado
     icon = folium.CustomIcon(
         radar_icon_url,
@@ -82,7 +79,7 @@ if equipamento_selecionado:
     # Intervalo de datas (sem selectbox de mês)
     data_intervalo = st.date_input(
         "Selecione o intervalo de dias:",
-        value=(data_minima, data_maxima),
+        value=(data_minima,),
         min_value=data_minima,
         max_value=data_maxima,
         format="DD/MM/YYYY"
@@ -116,7 +113,7 @@ if equipamento_selecionado:
         else:
             fig = px.bar(df, x="velocidade", y="contagem",
                             labels={"velocidade": "Velocidade (km/h)", "contagem": "Quantidade"},
-                            title=f"Distribuição das Velocidades ({data_inicial} a {data_final})")
+                            title=f"Distribuição das Velocidades ({data_inicial.strftime("%d/%m/%Y")} a {data_final.strftime("%d/%m/%Y")})")
             st.plotly_chart(fig, use_container_width=True)
     elif data_inicial and data_final and data_inicial > data_final:
         st.info("A data inicial deve ser menor ou igual à data final.")
