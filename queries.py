@@ -3,7 +3,7 @@ from textwrap import dedent
 def get_equipamentos():
     return dedent("""
         SELECT 
-            id, nome_processador, endereco, latitude, longitude
+            id, nome_processador, endereco, latitude, longitude, status, vel_regulamentada
         FROM equipamentos
         WHERE tipo_equipamento = 'radar'
             AND faixa_monitorada = 'A'
