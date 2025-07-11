@@ -28,12 +28,23 @@ equipamentos_validos = equipamentos_df[
 
 # =========== SIDEBAR (FILTRO DE DATA) ===========
 with st.sidebar:
+    # forçando sidebar mais larga pra acomodar o filtro de data
+    st.markdown("""
+    <style>
+        section[data-testid="stSidebar"] {
+            min-width: 350px !important;
+            width: 350px !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.header("Filtros")
+    hj = datetime.date.today()
     data_minima = datetime.date(2024, 1, 1)
-    data_maxima = datetime.date(2024, 12, 31)
+    data_maxima = datetime.date(hj.year, hj.month, hj.day)
     data_intervalo = st.date_input(
         "Selecione o intervalo de dias:",
-        value=(data_minima, data_minima),
+        value=(data_maxima, data_maxima),
         min_value=data_minima,
         max_value=data_maxima,
         format="DD/MM/YYYY"
