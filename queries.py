@@ -9,6 +9,7 @@ def get_equipamentos():
             AND faixa_monitorada = 'A'
             AND latitude IS NOT NULL
             AND longitude IS NOT NULL
+        ORDER BY nome_processador, faixa_monitorada
     """)
 
 def get_distribuicao_velocidade():
@@ -23,11 +24,21 @@ def get_distribuicao_velocidade():
         ORDER BY velocidade
     """)
 
+def get_fluxo(nome_processador, data_inicial, data_final):
+    return dedent("""
+        SELECT
+            SUM(volume_veiculos) AS fluxo_total
+        FROM dados_trafego dt
+        JOIN equipamentos eq ON dt.id_equipamento = eq.id
+        WHERE eq.nome_processador = %(nome_processador)s
+          AND dt.data BETWEEN %(data_inicial)s AND %(data_final)s    
+    """)
+
 def get_limites_datas():
-    return """
+    return dedent("""
         SELECT 
             MIN(data) as data_minima,
             MAX(data) as data_maxima
         FROM dados_velocidade
         WHERE equipamento = %(equipamento_id)s
-    """
+    """)

@@ -102,6 +102,29 @@ else:
         # Busca as infos do equipamento selecionado
         info_eq = equipamentos_validos[equipamentos_validos["id"] == equipamento_id].iloc[0]
 
+        colA, colB = st.columns([2,2])
+
+        # Linha 1: Regulamentada, Status
+
+        with colA:
+            st.markdown(
+                f"""<div class="card-indicador">
+                    <div class="sub-label">Velocidade Regulamentada</div>
+                    <div class="destaque">{info_eq['vel_regulamentada']} km/h</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+        with colB:
+            status_text = "ATIVO" if info_eq.get("status", 1) else "INATIVO"
+            status_color = "#0c810c" if info_eq.get("status", 1) else "#c71111"
+            st.markdown(
+                f"""<div class="card-indicador">
+                    <div class="sub-label">Status do Equipamento</div>
+                    <div class="status" style="color:{status_color}">{status_text}</div>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
         if data_inicial and data_final and data_inicial <= data_final:
             query = """
                 SELECT velocidade, COUNT(*) AS contagem
@@ -116,97 +139,33 @@ else:
                 "data_inicial": data_inicial.strftime("%Y-%m-%d"),
                 "data_final": data_final.strftime("%Y-%m-%d"),
             }
-            df = executar_consulta(query, params)
+            df_velocidade = executar_consulta(query, params)
 
-            if df is None or df.empty:
-                st.warning("Nenhum dado encontrado para o período e equipamento selecionados.")
+            if df_velocidade is None or df_velocidade.empty:
+                st.warning("Nenhum dado de velocidade encontrado para o período e equipamento selecionados.")
             else:
                 # ----- INDICADORES -----
-                velocidade_max = df["velocidade"].max()
-                velocidade_moda = df.loc[df['contagem'].idxmax(), "velocidade"]
-                total_veiculos = df["contagem"].sum()
-                velocidade_media = df['velocidade'].mean()
+                velocidade_max = df_velocidade["velocidade"].max()
+                velocidade_moda = df_velocidade.loc[df_velocidade['contagem'].idxmax(), "velocidade"]
+                total_veiculos_ocr = df_velocidade["contagem"].sum()
+                velocidade_media = df_velocidade['velocidade'].mean()
 
                 # Agora usa a velocidade do equipamento:
                 velocidade_regulamentada = info_eq['vel_regulamentada']
                 margem_tolerancia = (velocidade_regulamentada * 0.1)
 
-                dentro_regulamentada = df[df["velocidade"] <= velocidade_regulamentada]["contagem"].sum()
-                acima_tolerancia = df[df["velocidade"] > (velocidade_regulamentada + margem_tolerancia)]["contagem"].sum()
-                dentro_tolerancia = total_veiculos - acima_tolerancia - dentro_regulamentada
+                dentro_regulamentada = df_velocidade[df_velocidade["velocidade"] <= velocidade_regulamentada]["contagem"].sum()
+                acima_tolerancia = df_velocidade[df_velocidade["velocidade"] > (velocidade_regulamentada + margem_tolerancia)]["contagem"].sum()
+                dentro_tolerancia = total_veiculos_ocr - acima_tolerancia - dentro_regulamentada
 
-                pct_regulamentada = round(dentro_regulamentada / total_veiculos * 100,  2) if total_veiculos > 0 else 0
-                pct_dentro_tolerancia = round(dentro_tolerancia / total_veiculos * 100, 2) if total_veiculos > 0 else 0
-                pct_acima_tolerancia = round(acima_tolerancia / total_veiculos * 100, 2) if total_veiculos > 0 else 0
-
-                # ----- INDICADORES VISUAIS EM CARDS -----
-                st.markdown("""
-                    <style>
-                    .card-indicador {
-                        background: #f5f5f5;
-                        border-radius: 18px;
-                        padding: 22px 5px 15px 5px;
-                        margin: 0 10px 20px 0;
-                        min-width: 210px;
-                        text-align: center;
-                        display: flex;
-                        flex-direction: column;
-                        justify-content: center;
-                        height: 90px;
-                    }
-                    .destaque {
-                        font-size: 2.1rem;
-                        color: #005cb2;
-                        font-weight: bold;
-                        margin-top: 3px;
-                    }
-                    .status {
-                        font-size: 2rem;
-                        font-weight: bold;
-                        margin-top: 3px;
-                    }
-                    .sub-label {
-                        font-size: 1.06rem;
-                        color: #444;
-                        margin-bottom: 0.25rem;
-                    }
-                    </style>
-                """, unsafe_allow_html=True)
-
+                pct_regulamentada = round(dentro_regulamentada / total_veiculos_ocr * 100,  2) if total_veiculos_ocr > 0 else 0
+                pct_dentro_tolerancia = round(dentro_tolerancia / total_veiculos_ocr * 100, 2) if total_veiculos_ocr > 0 else 0
+                pct_acima_tolerancia = round(acima_tolerancia / total_veiculos_ocr * 100, 2) if total_veiculos_ocr > 0 else 0
+   
+                # Linha 2: Velocidades
                 colA, colB, colC = st.columns([2,2,2])
 
-                # Linha 1: Regulamentada + Status + Total veículos
                 with colA:
-                    st.markdown(
-                        f"""<div class="card-indicador">
-                            <div class="sub-label">Velocidade Regulamentada</div>
-                            <div class="destaque">{info_eq['vel_regulamentada']} km/h</div>
-                        </div>""",
-                        unsafe_allow_html=True,
-                    )
-                with colB:
-                    status_text = "ATIVO" if info_eq.get("status", 1) else "INATIVO"
-                    status_color = "#0c810c" if info_eq.get("status", 1) else "#c71111"
-                    st.markdown(
-                        f"""<div class="card-indicador">
-                            <div class="sub-label">Status do Equipamento</div>
-                            <div class="status" style="color:{status_color}">{status_text}</div>
-                        </div>""",
-                        unsafe_allow_html=True,
-                    )
-                with colC:
-                   st.markdown(
-                        f"""<div class="card-indicador">
-                            <div class="sub-label">Total de Veículos no Período</div>
-                            <div class="destaque">{locale.format_string('%.0f', total_veiculos, grouping=True)}</div>
-                        </div>""",
-                    unsafe_allow_html=True,
-                    )
-
-                # Linha 2: Mais praticada e Máxima (deixar centralizado)
-                colD, colE, colF = st.columns([2,2,2])
-
-                with colD:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Velocidade Média</div>
@@ -214,7 +173,7 @@ else:
                         </div>""",
                         unsafe_allow_html=True,
                     )
-                with colE:
+                with colB:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Velocidade Mais Praticada</div>
@@ -222,7 +181,7 @@ else:
                         </div>""",
                         unsafe_allow_html=True,
                     )
-                with colF:
+                with colC:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Velocidade Máxima</div>
@@ -230,50 +189,139 @@ else:
                         </div>""",
                         unsafe_allow_html=True,
                     )
+                # Linha 3: Total OCR (Lado esquerdo)
+                with colA:
+                    st.markdown(
+                        f"""<div class="card-indicador">
+                            <div class="sub-label">Total de Veículos Lidos (OCR)</div>
+                            <div class="destaque">{locale.format_string('%.0f', total_veiculos_ocr, grouping=True)}</div>
+                        </div>""",
+                    unsafe_allow_html=True,
+                    )
 
-                # ---- GRÁFICO DE DISTRIBUIÇÃO ----
-                fig_bar = px.bar(
-                    df, x="velocidade", y="contagem",
-                    labels={"velocidade": "Velocidade (km/h)", "contagem": "Quantidade"},
-                    title=f"Distribuição das Velocidades ({data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}):"
-                )
-                st.plotly_chart(fig_bar, use_container_width=True)
+        if data_inicial and data_final and data_inicial <= data_final:
+            # Consulta dados de fluxo
+            query_fluxo = get_fluxo(equipamento_selecionado, data_inicial, data_final)
 
-                # ---- PIZZA ----
-                donut_df = pd.DataFrame({
-                    "Categoria": ["Abaixo da Regulamentada", "Dentro da Tolerância de 10%", "Excesso de Velocidade"],
-                    "Percentual": [pct_regulamentada, pct_dentro_tolerancia, pct_acima_tolerancia]
-                })
-                fig_pizza = px.pie(
-                    donut_df, names="Categoria", values="Percentual",
-                    hole=0.5,
-                    color="Categoria",
-                    color_discrete_map={
-                        "Excesso de Velocidade": "red",
-                        "Dentro da Tolerância de 10%": "orange",
-                        "Abaixo da Regulamentada": "green"
-                    },
-                    title="Velocidades Acima da Regulamentada:"
-                )
-                st.plotly_chart(fig_pizza, use_container_width=True)
+            params_fluxo = {
+                "nome_processador": equipamento_selecionado,
+                "data_inicial": data_inicial.strftime("%Y-%m-%d"),
+                "data_final": data_final.strftime("%Y-%m-%d"),
+            }
 
-                # ---- BOXPLOT / HORIZONTAL ----
-                bins = [0, 20, 30, 40, 50, 60, 80, 90, 100, 200]
-                labels = [
-                    "Abaixo de 20 km/h", "21 a 30 km/h", "31 a 40 km/h", "41 a 50 km/h", "51 a 60 km/h",
-                    "61 a 80 km/h", "81 a 90 km/h", "91 a 100 km/h", "Acima de 101 km/h"
-                ]
-                df["faixa"] = pd.cut(df["velocidade"], bins=bins, labels=labels, right=True)
-                faixas = df.groupby("faixa")["contagem"].sum().reset_index()
-                fig_box = px.bar(
-                    faixas, x="contagem", y="faixa", orientation="h",
-                    labels={"contagem": "Quantidade", "faixa": "Faixa de velocidade"},
-                    title="Distribuição de Veículos por Faixa de Velocidade:"
-                )
-                st.plotly_chart(fig_box, use_container_width=True)
+            df_fluxo = executar_consulta(query_fluxo, params_fluxo)
+            
+            # st.write(df_fluxo)
 
-        elif data_inicial and data_final and data_inicial > data_final:
-            st.info("A data inicial deve ser menor ou igual à data final.")
+            if df_fluxo["fluxo_total"].isnull().all() or df_fluxo.empty:
+                st.warning("Nenhum dado de fluxo encontrado para o período e equipamento selecionados.")
+            else:
+                total_veiculos = df_fluxo['fluxo_total']
+                if total_veiculos_ocr > 0:
+                    aproveitamento_ocr = (total_veiculos_ocr/total_veiculos) * 100
+
+                # Linha 3: Fluxo total e aproveitamento (meio e lado direito)
+
+                with colB:
+                    st.markdown(
+                        f"""<div class="card-indicador">
+                            <div class="sub-label">Total de Veículos no Período</div>
+                            <div class="destaque">{locale.format_string('%.0f', total_veiculos, grouping=True)}</div>
+                        </div>""",
+                    unsafe_allow_html=True,
+                    )
+
+                with colC:
+                    st.markdown(
+                        f"""<div class="card-indicador">
+                            <div class="sub-label">Aproveitamento de OCR</div>
+                            <div class="destaque">{locale.format_string('%.2f', aproveitamento_ocr, grouping=True)} %</div>
+                        </div>""",
+                    unsafe_allow_html=True,
+                    )
+
+        # ----- INDICADORES VISUAIS EM CARDS -----
+        st.markdown("""
+            <style>
+            .card-indicador {
+                background: #f5f5f5;
+                border-radius: 18px;
+                padding: 22px 5px 15px 5px;
+                margin: 0 10px 20px 0;
+                min-width: 210px;
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                height: 90px;
+            }
+            .destaque {
+                font-size: 2.1rem;
+                color: #005cb2;
+                font-weight: bold;
+                margin-top: 3px;
+            }
+            .status {
+                font-size: 2rem;
+                font-weight: bold;
+                margin-top: 3px;
+            }
+            .sub-label {
+                font-size: 1.06rem;
+                color: #444;
+                margin-bottom: 0.25rem;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        if df_velocidade is None or df_velocidade.empty:
+            pass
+        else:
+            # =========== GRÁFICOS ===========
+            
+            # ---- GRÁFICO DE DISTRIBUIÇÃO ----
+            fig_bar = px.bar(
+                df_velocidade, x="velocidade", y="contagem",
+                labels={"velocidade": "Velocidade (km/h)", "contagem": "Quantidade"},
+                title=f"Distribuição das Velocidades ({data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}):"
+            )
+            st.plotly_chart(fig_bar, use_container_width=True)
+
+            # ---- PIZZA ----
+            donut_df = pd.DataFrame({
+                "Categoria": ["Abaixo da Regulamentada", "Dentro da Tolerância de 10%", "Excesso de Velocidade"],
+                "Percentual": [pct_regulamentada, pct_dentro_tolerancia, pct_acima_tolerancia]
+            })
+            fig_pizza = px.pie(
+                donut_df, names="Categoria", values="Percentual",
+                hole=0.5,
+                color="Categoria",
+                color_discrete_map={
+                    "Excesso de Velocidade": "red",
+                    "Dentro da Tolerância de 10%": "orange",
+                    "Abaixo da Regulamentada": "green"
+                },
+                title="Velocidades Acima da Regulamentada:"
+            )
+            st.plotly_chart(fig_pizza, use_container_width=True)
+
+            # ---- BOXPLOT / HORIZONTAL ----
+            bins = [0, 20, 30, 40, 50, 60, 80, 90, 100, 200]
+            labels = [
+                "Abaixo de 20 km/h", "21 a 30 km/h", "31 a 40 km/h", "41 a 50 km/h", "51 a 60 km/h",
+                "61 a 80 km/h", "81 a 90 km/h", "91 a 100 km/h", "Acima de 101 km/h"
+            ]
+            df_velocidade["faixa"] = pd.cut(df_velocidade["velocidade"], bins=bins, labels=labels, right=True)
+            faixas = df_velocidade.groupby("faixa")["contagem"].sum().reset_index()
+            fig_box = px.bar(
+                faixas, x="contagem", y="faixa", orientation="h",
+                labels={"contagem": "Quantidade", "faixa": "Faixa de velocidade"},
+                title="Distribuição de Veículos por Faixa de Velocidade:"
+            )
+            st.plotly_chart(fig_box, use_container_width=True)
+
+    elif data_inicial and data_final and data_inicial > data_final:
+        st.info("A data inicial deve ser menor ou igual à data final.")
 
     else:
         st.info("Clique em um equipamento no mapa para começar.")
