@@ -19,12 +19,14 @@ jobs:
 
       - name: Deploy over SSH
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
+            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
             set -e
             cd /opt/streamlit/app
             git fetch --all
             git reset --hard origin/main
-            source .venv/bin/activate
-            pip install -r requirements.txt
+
+            # usa o pip DA VENV diretamente (sem precisar de "source")
+            /opt/streamlit/app/.venv/bin/pip install -r requirements.txt
+
             sudo systemctl restart streamlit
-          '
+            '
