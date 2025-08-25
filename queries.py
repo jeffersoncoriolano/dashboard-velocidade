@@ -42,3 +42,53 @@ def get_limites_datas():
         FROM dados_velocidade
         WHERE equipamento = %(equipamento_id)s
     """)
+
+def get_inoperancia():
+    return dedent("""
+        WITH trafego_agrupado AS (
+            SELECT
+                e.nome_processador,
+                t.data,
+                t.hora,
+                SUM(t.volume_veiculos) AS volume_veiculos_total
+            FROM dados_trafego t
+            JOIN equipamentos e ON t.id_equipamento = e.id
+            WHERE t.data BETWEEN %(data_inicial)s AND %(data_final)s
+            GROUP BY e.nome_processador, t.data, t.hora
+        ),
+        trafego_zerado AS (
+            SELECT
+                nome_processador,
+                data,
+                hora,
+                volume_veiculos_total,
+                CASE WHEN volume_veiculos_total = 0 THEN 1 ELSE 0 END AS inoperante,
+                TIMESTAMP(data, hora) AS ts
+            FROM trafego_agrupado
+        ),
+        marcado AS (
+            SELECT
+                *,
+                ROW_NUMBER() OVER (PARTITION BY nome_processador ORDER BY ts) -
+                ROW_NUMBER() OVER (PARTITION BY nome_processador, inoperante ORDER BY ts) AS grupo
+            FROM trafego_zerado
+        ),
+        intervalos AS (
+            SELECT
+                nome_processador,
+                grupo,
+                MIN(ts) AS inicio_inoperancia,
+                MAX(ts) AS fim_inoperancia,
+                COUNT(*) AS horas_inoperante
+            FROM marcado
+            WHERE inoperante = 1
+            GROUP BY nome_processador, grupo
+        )
+        SELECT
+            nome_processador,
+            SUM(horas_inoperante) AS horas_inoperantes
+        FROM intervalos
+        WHERE horas_inoperante >= 25
+        GROUP BY nome_processador
+        ORDER BY nome_processador;
+    """)

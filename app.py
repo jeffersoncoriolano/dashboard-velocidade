@@ -54,6 +54,20 @@ with st.sidebar:
     else:
         data_inicial, data_final = None, None
 
+    # Botão de consulta de inoperância
+    if st.button("Consultar Inoperâncias"):
+        params = {
+            "data_inicial": data_inicial.strftime("%Y-%m-%d"),
+            "data_final": data_final.strftime("%Y-%m-%d"),
+        }
+        df_inoperancia = executar_consulta(get_inoperancia(), params)
+
+        if df_inoperancia is not None and not df_inoperancia.empty:
+            st.markdown("### Resultado de Inoperância no período selecionado")
+            st.dataframe(df_inoperancia)
+        else:
+            st.info("Nenhuma inoperância de 25h ou mais encontrada no período.")
+
 # =========== TELA PRINCIPAL ===========
 
 if equipamentos_validos.empty:
@@ -82,18 +96,26 @@ else:
         )
 
         folium.Marker(
-        location=[row['latitude'], row['longitude']],
-        tooltip=row['nome_processador'],
-        popup=popup_text,
-        icon=icon
+            location=[row['latitude'], row['longitude']],
+            tooltip=row['nome_processador'],
+            popup=popup_text,
+            icon=icon
         ).add_to(m)
         
         mapa_id_por_nome[row['nome_processador']] = row['id']
 
     st.markdown("#### Selecione um equipamento clicando no mapa ⤵️")
-    map_result = st_folium(m, height=500, width=900)
+    map_result = st_folium(m, height=500, width=900, key="mapa")  # [ALTERAÇÃO] key para estabilidade
 
-    equipamento_selecionado = map_result.get("last_object_clicked_tooltip")
+    # [ALTERAÇÃO] Persistir seleção entre interações
+    if "equip_selecionado" not in st.session_state:
+        st.session_state.equip_selecionado = None
+
+    equipamento_clicado = map_result.get("last_object_clicked_tooltip")
+    if equipamento_clicado:
+        st.session_state.equip_selecionado = equipamento_clicado  # [ALTERAÇÃO]
+
+    equipamento_selecionado = st.session_state.equip_selecionado  # [ALTERAÇÃO]
     equipamento_id = mapa_id_por_nome.get(equipamento_selecionado)
 
     if equipamento_selecionado:
@@ -102,9 +124,8 @@ else:
         # Busca as infos do equipamento selecionado
         info_eq = equipamentos_validos[equipamentos_validos["id"] == equipamento_id].iloc[0]
 
-        colA, colB = st.columns([2,2])
-
-        # Linha 1: Regulamentada, Status
+        # ===== Linha 1 (duas colunas) =====
+        colA, colB = st.columns([2,2])  # [ALTERAÇÃO] mantém apenas 2 cards na primeira linha
 
         with colA:
             st.markdown(
@@ -124,6 +145,14 @@ else:
                 </div>""",
                 unsafe_allow_html=True,
             )
+
+        # [ALTERAÇÃO] Pré-criar bloco de 3 colunas para as linhas seguintes (velocidades e fluxo)
+        col2A, col2B, col2C = st.columns([2,2,2])
+
+        # [ALTERAÇÃO] Inicializar variáveis para evitar NameError quando não houver dados de velocidade
+        df_velocidade = pd.DataFrame()
+        total_veiculos_ocr = 0
+        pct_regulamentada = pct_dentro_tolerancia = pct_acima_tolerancia = 0.0
 
         if data_inicial and data_final and data_inicial <= data_final:
             query = """
@@ -162,10 +191,8 @@ else:
                 pct_dentro_tolerancia = round(dentro_tolerancia / total_veiculos_ocr * 100, 2) if total_veiculos_ocr > 0 else 0
                 pct_acima_tolerancia = round(acima_tolerancia / total_veiculos_ocr * 100, 2) if total_veiculos_ocr > 0 else 0
    
-                # Linha 2: Velocidades
-                colA, colB, colC = st.columns([2,2,2])
-
-                with colA:
+                # ===== Linha 2 (três colunas) =====
+                with col2A:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Velocidade Média</div>
@@ -173,7 +200,7 @@ else:
                         </div>""",
                         unsafe_allow_html=True,
                     )
-                with colB:
+                with col2B:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Velocidade Mais Praticada</div>
@@ -181,7 +208,7 @@ else:
                         </div>""",
                         unsafe_allow_html=True,
                     )
-                with colC:
+                with col2C:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Velocidade Máxima</div>
@@ -189,14 +216,14 @@ else:
                         </div>""",
                         unsafe_allow_html=True,
                     )
-                # Linha 3: Total OCR (Lado esquerdo)
-                with colA:
+                # ===== Linha 3 (usa mesmas 3 colunas) — lado esquerdo =====
+                with col2A:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Total de Veículos Lidos (OCR)</div>
                             <div class="destaque">{locale.format_string('%.0f', total_veiculos_ocr, grouping=True)}</div>
                         </div>""",
-                    unsafe_allow_html=True,
+                        unsafe_allow_html=True,
                     )
 
         if data_inicial and data_final and data_inicial <= data_final:
@@ -210,34 +237,35 @@ else:
             }
 
             df_fluxo = executar_consulta(query_fluxo, params_fluxo)
-            
             # st.write(df_fluxo)
 
-            if df_fluxo["fluxo_total"].isnull().all() or df_fluxo.empty:
+            # [ALTERAÇÃO] Validar None/empty e somar para obter número (evita Series)
+            if df_fluxo is None or df_fluxo.empty or df_fluxo["fluxo_total"].isnull().all():
                 st.warning("Nenhum dado de fluxo encontrado para o período e equipamento selecionados.")
             else:
-                total_veiculos = df_fluxo['fluxo_total']
-                if total_veiculos_ocr > 0:
-                    aproveitamento_ocr = (total_veiculos_ocr/total_veiculos) * 100
+                total_veiculos = int(pd.to_numeric(df_fluxo['fluxo_total'], errors='coerce').fillna(0).sum())  # [ALTERAÇÃO]
 
-                # Linha 3: Fluxo total e aproveitamento (meio e lado direito)
+                aproveitamento_ocr = 0.0  # [ALTERAÇÃO] inicializa
+                if total_veiculos > 0 and total_veiculos_ocr > 0:  # [ALTERAÇÃO]
+                    aproveitamento_ocr = (total_veiculos_ocr / total_veiculos) * 100
 
-                with colB:
+                # ===== Linha 3 (complemento nas colunas do meio e direita) =====
+                with col2B:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Total de Veículos no Período</div>
                             <div class="destaque">{locale.format_string('%.0f', total_veiculos, grouping=True)}</div>
                         </div>""",
-                    unsafe_allow_html=True,
+                        unsafe_allow_html=True,
                     )
 
-                with colC:
+                with col2C:
                     st.markdown(
                         f"""<div class="card-indicador">
                             <div class="sub-label">Aproveitamento de OCR</div>
                             <div class="destaque">{locale.format_string('%.2f', aproveitamento_ocr, grouping=True)} %</div>
                         </div>""",
-                    unsafe_allow_html=True,
+                        unsafe_allow_html=True,
                     )
 
         # ----- INDICADORES VISUAIS EM CARDS -----
@@ -278,8 +306,6 @@ else:
             pass
         else:
             # =========== GRÁFICOS ===========
-            
-            # ---- GRÁFICO DE DISTRIBUIÇÃO ----
             fig_bar = px.bar(
                 df_velocidade, x="velocidade", y="contagem",
                 labels={"velocidade": "Velocidade (km/h)", "contagem": "Quantidade"},
@@ -287,7 +313,6 @@ else:
             )
             st.plotly_chart(fig_bar, use_container_width=True)
 
-            # ---- PIZZA ----
             donut_df = pd.DataFrame({
                 "Categoria": ["Abaixo da Regulamentada", "Dentro da Tolerância de 10%", "Excesso de Velocidade"],
                 "Percentual": [pct_regulamentada, pct_dentro_tolerancia, pct_acima_tolerancia]
@@ -305,7 +330,6 @@ else:
             )
             st.plotly_chart(fig_pizza, use_container_width=True)
 
-            # ---- BOXPLOT / HORIZONTAL ----
             bins = [0, 20, 30, 40, 50, 60, 80, 90, 100, 200]
             labels = [
                 "Abaixo de 20 km/h", "21 a 30 km/h", "31 a 40 km/h", "41 a 50 km/h", "51 a 60 km/h",
@@ -322,6 +346,5 @@ else:
 
     elif data_inicial and data_final and data_inicial > data_final:
         st.info("A data inicial deve ser menor ou igual à data final.")
-
     else:
         st.info("Clique em um equipamento no mapa para começar.")
