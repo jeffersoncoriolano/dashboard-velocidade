@@ -27,16 +27,19 @@ O sistema se conecta a um banco de dados **MySQL (AWS RDS)** e permite explorar 
 ## 🖼️ Screenshots
 
 ### Mapa interativo + seleção de equipamento
-![Mapa](fbe6a429-c7db-4e30-a4c7-0caab281471b.png)
+![Mapa](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/mapa_interativo.png)
 
 ### Indicadores de velocidade e status
-![Indicadores](b7618627-408a-4b67-bdd9-5cccc55204f2.png)
+![Indicadores](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/indicadores_de_velocidade.png)
 
 ### Distribuição das velocidades
-![Gráfico](d1c65bb1-2e9d-4aed-8765-3a6e30e35a0b.png)
+![Gráfico](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/distribuicao_de_velocidades.png)
 
-### Indicadores de fluxo e OCR
-![Fluxo](91f81d82-5be3-40eb-98ad-ac027123cc9f.png)
+### Excessos de velocidade
+![Gráfico](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/excessos_de_velocidade.png)
+
+### Faixas de velocidade
+![Fluxo](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/faixas_de_velocidade.png)
 
 ---
 
@@ -55,18 +58,21 @@ O sistema se conecta a um banco de dados **MySQL (AWS RDS)** e permite explorar 
 
 1. Clone este repositório:
 ```bash
-git clone https://github.com/seuusuario/dashboard-velocidade.git
-cd dashboard-velocidade
+    git clone https://github.com/jeffersoncoriolano/dashboard-velocidade.git
+    cd dashboard-velocidade
+```
 
 2. Crie e ative um ambiente virtual:
 ```bash
     python3 -m venv .venv
     source .venv/bin/activate   # Linux/Mac
     .venv\Scripts\activate      # Windows (PowerShell)
+```
 
 3. Instale as dependências:
 ```bash
     pip install -r requirements.txt
+```
 
 4. Crie um arquivo .env na raiz do projeto com as credenciais do banco:
 ```bash
@@ -75,24 +81,27 @@ cd dashboard-velocidade
     DB_USER=seu_usuario
     DB_PASSWORD=sua_senha
     DB_NAME=seu_banco
+```
 
 5. Execute o dashboard:
 ```bash
     streamlit run app.py
+```
 
 6. Acesse no navegador:
 ```bash
     http://localhost:8501
+```
 
 ---
 
 ## ☁️ Deploy na AWS (produção)
 
-    O sistema foi implantado em:
+O sistema foi implantado em:
 
-    - **Banco de dados**: Amazon RDS (MySQL).
-    - **Aplicação**: Amazon EC2 (Ubuntu), rodando como serviço systemd e exposto via Nginx.
-    - **Domínio customizado**: coriolano.app gerenciado pelo Cloudflare.
+- **Banco de dados**: Amazon RDS (MySQL).
+- **Aplicação**: Amazon EC2 (Ubuntu), rodando como serviço systemd e exposto via Nginx.
+- **Domínio customizado**: coriolano.app gerenciado pelo Cloudflare.
 
 ---
 
@@ -105,6 +114,7 @@ cd dashboard-velocidade
     │── requirements.txt    # Dependências do projeto
     │── icon/               # Ícones customizados para os marcadores no mapa
     │── .env (local)        # Variáveis de ambiente (não versionado)
+    ```
 
 ---
 
