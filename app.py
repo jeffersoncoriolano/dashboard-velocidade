@@ -105,17 +105,17 @@ else:
         mapa_id_por_nome[row['nome_processador']] = row['id']
 
     st.markdown("#### Selecione um equipamento clicando no mapa ⤵️")
-    map_result = st_folium(m, height=500, width=900, key="mapa")  # [ALTERAÇÃO] key para estabilidade
+    map_result = st_folium(m, height=500, width=900, key="mapa")  # key para estabilidade
 
-    # [ALTERAÇÃO] Persistir seleção entre interações
+    # Persistir seleção entre interações
     if "equip_selecionado" not in st.session_state:
         st.session_state.equip_selecionado = None
 
     equipamento_clicado = map_result.get("last_object_clicked_tooltip")
     if equipamento_clicado:
-        st.session_state.equip_selecionado = equipamento_clicado  # [ALTERAÇÃO]
+        st.session_state.equip_selecionado = equipamento_clicado
 
-    equipamento_selecionado = st.session_state.equip_selecionado  # [ALTERAÇÃO]
+    equipamento_selecionado = st.session_state.equip_selecionado  
     equipamento_id = mapa_id_por_nome.get(equipamento_selecionado)
 
     if equipamento_selecionado:
@@ -125,7 +125,7 @@ else:
         info_eq = equipamentos_validos[equipamentos_validos["id"] == equipamento_id].iloc[0]
 
         # ===== Linha 1 (duas colunas) =====
-        colA, colB = st.columns([2,2])  # [ALTERAÇÃO] mantém apenas 2 cards na primeira linha
+        colA, colB = st.columns([2,2])  # mantém apenas 2 cards na primeira linha
 
         with colA:
             st.markdown(
@@ -146,10 +146,10 @@ else:
                 unsafe_allow_html=True,
             )
 
-        # [ALTERAÇÃO] Pré-criar bloco de 3 colunas para as linhas seguintes (velocidades e fluxo)
+        # Pré-criar bloco de 3 colunas para as linhas seguintes (velocidades e fluxo)
         col2A, col2B, col2C = st.columns([2,2,2])
 
-        # [ALTERAÇÃO] Inicializar variáveis para evitar NameError quando não houver dados de velocidade
+        # Inicializar variáveis para evitar NameError quando não houver dados de velocidade
         df_velocidade = pd.DataFrame()
         total_veiculos_ocr = 0
         pct_regulamentada = pct_dentro_tolerancia = pct_acima_tolerancia = 0.0
@@ -239,14 +239,14 @@ else:
             df_fluxo = executar_consulta(query_fluxo, params_fluxo)
             # st.write(df_fluxo)
 
-            # [ALTERAÇÃO] Validar None/empty e somar para obter número (evita Series)
+            # Validar None/empty e somar para obter número (evita Series)
             if df_fluxo is None or df_fluxo.empty or df_fluxo["fluxo_total"].isnull().all():
                 st.warning("Nenhum dado de fluxo encontrado para o período e equipamento selecionados.")
             else:
-                total_veiculos = int(pd.to_numeric(df_fluxo['fluxo_total'], errors='coerce').fillna(0).sum())  # [ALTERAÇÃO]
+                total_veiculos = int(pd.to_numeric(df_fluxo['fluxo_total'], errors='coerce').fillna(0).sum())  
 
-                aproveitamento_ocr = 0.0  # [ALTERAÇÃO] inicializa
-                if total_veiculos > 0 and total_veiculos_ocr > 0:  # [ALTERAÇÃO]
+                aproveitamento_ocr = 0.0  # inicializa
+                if total_veiculos > 0 and total_veiculos_ocr > 0:
                     aproveitamento_ocr = (total_veiculos_ocr / total_veiculos) * 100
 
                 # ===== Linha 3 (complemento nas colunas do meio e direita) =====
@@ -315,10 +315,11 @@ else:
 
             donut_df = pd.DataFrame({
                 "Categoria": ["Abaixo da Regulamentada", "Dentro da Tolerância de 10%", "Excesso de Velocidade"],
-                "Percentual": [pct_regulamentada, pct_dentro_tolerancia, pct_acima_tolerancia]
+                "Percentual": [pct_regulamentada, pct_dentro_tolerancia, pct_acima_tolerancia],
+                "Valores": [dentro_regulamentada, dentro_tolerancia, acima_tolerancia]
             })
             fig_pizza = px.pie(
-                donut_df, names="Categoria", values="Percentual",
+                donut_df, names="Categoria", values="Valores",
                 hole=0.5,
                 color="Categoria",
                 color_discrete_map={
