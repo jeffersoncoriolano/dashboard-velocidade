@@ -114,7 +114,7 @@ O sistema foi implantado em:
     │── requirements.txt    # Dependências do projeto
     │── icon/               # Ícones customizados para os marcadores no mapa
     │── .env (local)        # Variáveis de ambiente (não versionado)
-    ```
+```
 
 ---
 

@@ -237,7 +237,6 @@ else:
             }
 
             df_fluxo = executar_consulta(query_fluxo, params_fluxo)
-            # st.write(df_fluxo)
 
             # Validar None/empty e somar para obter número (evita Series)
             if df_fluxo is None or df_fluxo.empty or df_fluxo["fluxo_total"].isnull().all():
