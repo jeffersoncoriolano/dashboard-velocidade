@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st 
 import folium
 from streamlit_folium import st_folium
 import pandas as pd
@@ -19,6 +19,43 @@ load_dotenv()
 
 st.set_page_config(layout="wide")
 st.title("📈 Dashboard das Velocidades")
+
+# >>> CSS para controle de impressão, quebras de página e tamanhos
+st.markdown("""
+<style>
+/* --- TELA (normal) --- */
+.print-only { display: none; }           /* aparece só na impressão */
+.no-print  { display: block; }           /* aparece só na tela */
+
+.report-section { margin-bottom: 18px; }
+.avoid-break { break-inside: avoid; page-break-inside: avoid; }
+.print-page-break { height: 0; }
+
+/* Ajustes visuais dos gráficos na tela */
+.plot-wrap { padding: 4px 8px; }
+
+/* --- IMPRESSÃO --- */
+@page { size: A4 portrait; margin: 12mm; }  /* mude para 'A4 landscape' p/ teste */
+
+@media print {
+  .print-only { display: block !important; }
+  .no-print  { display: none !important; }
+
+  header[data-testid="stHeader"],
+  section[data-testid="stSidebar"],
+  footer { display: none !important; }
+
+  .main .block-container { padding-top: 0 !important; }
+
+  .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+  .print-page-break { page-break-before: always; break-before: page; }
+
+  /* Deixa as duas colunas de gráficos realmente 50/50 na impressão */
+  .two-up { display: flex; gap: 12px; }
+  .two-up > div { flex: 1 1 50%; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Carregar equipamentos para o mapa (agora já traz status e velocidade regulamentada)
 equipamentos_df = executar_consulta(get_equipamentos())
@@ -120,12 +157,16 @@ else:
 
     if equipamento_selecionado:
         st.info(f"✅ Equipamento selecionado: {equipamento_selecionado}")
+        st.info(f"✅ Período selecionado: {data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}")
 
         # Busca as infos do equipamento selecionado
         info_eq = equipamentos_validos[equipamentos_validos["id"] == equipamento_id].iloc[0]
 
         # ===== Linha 1 (duas colunas) =====
         colA, colB = st.columns([2,2])  # mantém apenas 2 cards na primeira linha
+
+        # >>> envolver os cards em contêiner que evita quebra
+        st.markdown('<div class="avoid-break">', unsafe_allow_html=True)
 
         with colA:
             st.markdown(
@@ -267,6 +308,9 @@ else:
                         unsafe_allow_html=True,
                     )
 
+        # fecha o contêiner de cards que evita quebra na impressão
+        st.markdown('</div>', unsafe_allow_html=True)
+
         # ----- INDICADORES VISUAIS EM CARDS -----
         st.markdown("""
             <style>
@@ -301,17 +345,26 @@ else:
             </style>
         """, unsafe_allow_html=True)
         
+        # >>> quebra de página depois do mapa e dos cards (vai iniciar a página 2)
+        st.markdown('<div class="print-page-break"></div>', unsafe_allow_html=True)
+
         if df_velocidade is None or df_velocidade.empty:
             pass
         else:
-            # =========== GRÁFICOS ===========
+            # ======= GRÁFICOS =======
+
+            # >>> tamanhos consistentes p/ caber 2 por página
+            common_margins = dict(t=40, b=40, l=40, r=20)
+
+            # ---- GRÁFICO DE DISTRIBUIÇÃO (barras) ----
             fig_bar = px.bar(
                 df_velocidade, x="velocidade", y="contagem",
                 labels={"velocidade": "Velocidade (km/h)", "contagem": "Quantidade"},
-                title=f"Distribuição das Velocidades ({data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}):"
+                title=f"Distribuição das Velocidades ({data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')})"
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            fig_bar.update_layout(height=420, margin=common_margins)
 
+            # ---- PIZZA ----
             donut_df = pd.DataFrame({
                 "Categoria": ["Abaixo da Regulamentada", "Dentro da Tolerância de 10%", "Excesso de Velocidade"],
                 "Percentual": [pct_regulamentada, pct_dentro_tolerancia, pct_acima_tolerancia],
@@ -326,23 +379,76 @@ else:
                     "Dentro da Tolerância de 10%": "orange",
                     "Abaixo da Regulamentada": "green"
                 },
-                title="Velocidades Acima da Regulamentada:"
+                title="Excessos de Velocidade"
             )
-            st.plotly_chart(fig_pizza, use_container_width=True)
+            fig_pizza.update_layout(height=420, margin=common_margins, legend=dict(orientation="h"))
 
-            bins = [0, 20, 30, 40, 50, 60, 80, 90, 100, 200]
+            # ---- FAIXAS (horizontal) ----
+            bins = [0, 20, 30, 40, 50, 60, 80, 90, 100, 120, float("inf")]
             labels = [
                 "Abaixo de 20 km/h", "21 a 30 km/h", "31 a 40 km/h", "41 a 50 km/h", "51 a 60 km/h",
-                "61 a 80 km/h", "81 a 90 km/h", "91 a 100 km/h", "Acima de 101 km/h"
+                "61 a 80 km/h", "81 a 90 km/h", "91 a 100 km/h", "101 a 120 km/h", "Acima de 120 km/h"
             ]
-            df_velocidade["faixa"] = pd.cut(df_velocidade["velocidade"], bins=bins, labels=labels, right=True)
-            faixas = df_velocidade.groupby("faixa")["contagem"].sum().reset_index()
-            fig_box = px.bar(
-                faixas, x="contagem", y="faixa", orientation="h",
-                labels={"contagem": "Quantidade", "faixa": "Faixa de velocidade"},
-                title="Distribuição de Veículos por Faixa de Velocidade:"
+
+            df_velocidade["faixa"] = pd.cut(
+                df_velocidade["velocidade"],
+                bins=bins,
+                labels=labels,
+                right=True
             )
-            st.plotly_chart(fig_box, use_container_width=True)
+
+            faixas = df_velocidade.groupby("faixa")["contagem"].sum().reset_index()
+
+            fig_box = px.bar(
+                faixas,
+                x="contagem",
+                y="faixa",
+                orientation="h",
+                text="contagem",  # adiciona valores nas barras
+                labels={"contagem": "Quantidade", "faixa": "Faixa de velocidade"},
+                title="Distribuição de Veículos por Faixa de Velocidade"
+            )
+
+            # posição do texto fora das barras
+            fig_box.update_traces(textposition="outside")
+
+            # calcula o maior valor para abrir espaço para o texto "fora" da barra
+            mc = pd.to_numeric(faixas["contagem"], errors="coerce")
+            max_contagem = float(mc.max()) if mc.notna().any() else 0.0
+            xmax = (max_contagem * 1.18) if max_contagem > 0 else 10  # 15% de folga (ajuste se quiser)
+
+            fig_box.update_layout(
+                height=420,
+                xaxis=dict(title="Quantidade", range=[0, xmax]),
+                yaxis=dict(title="Faixa de Velocidade")
+            )
+
+            # ===== Página 2: gráfico de distribuição SOZINHO =====
+            st.markdown('<div class="report-section avoid-break">', unsafe_allow_html=True)
+            st.markdown('<div class="plot-wrap">', unsafe_allow_html=True)
+            st.plotly_chart(fig_bar, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # >>> quebra para começar a seção seguinte (opcional; comente se não quiser quebrar página)
+            # st.markdown('<div class="print-page-break"></div>', unsafe_allow_html=True)
+
+            # ===== Página 3: DOIS gráficos lado a lado (pizza + faixas) =====
+            st.markdown('<div class="report-section avoid-break two-up">', unsafe_allow_html=True)
+            col_left, col_right = st.columns(2)
+
+            with col_left:
+                st.markdown('<div class="plot-wrap">', unsafe_allow_html=True)
+                st.plotly_chart(fig_pizza, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            with col_right:
+                st.markdown('<div class="plot-wrap">', unsafe_allow_html=True)
+                st.plotly_chart(fig_box, use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown('</div>', unsafe_allow_html=True)
+
 
     elif data_inicial and data_final and data_inicial > data_final:
         st.info("A data inicial deve ser menor ou igual à data final.")
