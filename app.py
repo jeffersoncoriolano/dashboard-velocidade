@@ -8,6 +8,14 @@ from dotenv import load_dotenv
 from queries import *
 from db_connector import executar_consulta
 import locale
+import base64
+from pathlib import Path
+
+def _img_b64(path: str) -> str:
+    p = Path(path)
+    if not p.exists():
+        return ""  # evita quebrar a página se faltar o arquivo
+    return base64.b64encode(p.read_bytes()).decode("utf-8")
 
 # Locale para separador brasileiro
 try:
@@ -86,24 +94,38 @@ with st.sidebar:
         max_value=data_maxima,
         format="DD/MM/YYYY"
     )
-    if isinstance(data_intervalo, tuple) and len(data_intervalo) == 2:
-        data_inicial, data_final = data_intervalo
+    # Streamlit pode devolver:
+    # - tuple (start, end) quando o range está completo
+    # - date (uma data) enquanto o usuário ainda está escolhendo
+    # - tuple estranho/len != 2 em alguns casos de interação
+    if isinstance(data_intervalo, tuple):
+        if len(data_intervalo) == 2:
+            data_inicial, data_final = data_intervalo
+        elif len(data_intervalo) == 1:
+            data_inicial = data_final = data_intervalo[0]
+        else:
+            data_inicial = data_final = None
+    elif isinstance(data_intervalo, datetime.date):
+        data_inicial = data_final = data_intervalo
     else:
-        data_inicial, data_final = None, None
+        data_inicial = data_final = None
 
     # Botão de consulta de inoperância
     if st.button("Consultar Inoperâncias"):
-        params = {
-            "data_inicial": data_inicial.strftime("%Y-%m-%d"),
-            "data_final": data_final.strftime("%Y-%m-%d"),
-        }
-        df_inoperancia = executar_consulta(get_inoperancia(), params)
-
-        if df_inoperancia is not None and not df_inoperancia.empty:
-            st.markdown("### Resultado de Inoperância no período selecionado")
-            st.dataframe(df_inoperancia)
+        if not (data_inicial and data_final):
+            st.warning("Selecione o intervalo completo antes de consultar inoperâncias.")
         else:
-            st.info("Nenhuma inoperância de 25h ou mais encontrada no período.")
+            params = {
+                "data_inicial": data_inicial.strftime("%Y-%m-%d"),
+                "data_final": data_final.strftime("%Y-%m-%d"),
+            }
+            df_inoperancia = executar_consulta(get_inoperancia(), params)
+
+            if df_inoperancia is not None and not df_inoperancia.empty:
+                st.markdown("### Resultado de Inoperância no período selecionado")
+                st.dataframe(df_inoperancia)
+            else:
+                st.info("Nenhuma inoperância de 25h ou mais encontrada no período.")
 
 # =========== TELA PRINCIPAL ===========
 
@@ -142,7 +164,40 @@ else:
         mapa_id_por_nome[row['nome_processador']] = row['id']
 
     st.markdown("#### Selecione um equipamento clicando no mapa ⤵️")
-    map_result = st_folium(m, height=500, width=900, key="mapa")  # key para estabilidade
+
+    col_map, col_leg = st.columns([4, 1], gap="large")
+
+    with col_map:
+        map_result = st_folium(m, height=500, width=None, key="mapa")  # width=None -> responsivo
+
+    with col_leg:
+        st.markdown(
+            """
+            <div style="
+                border:1px solid rgba(0,0,0,0.12);
+                border-radius:14px;
+                padding:12px 12px;
+                background:#ffffff;
+                color:#111827;
+            ">
+            <div style="font-weight:700; margin-bottom:10px;">Legenda</div>
+
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <img src="data:image/png;base64,{RADAR_ATIVO}" style="width:28px; height:28px;" />
+                <div><b>Ativo</b></div>
+            </div>
+
+            <div style="display:flex; align-items:center; gap:10px;">
+                <img src="data:image/png;base64,{RADAR_INATIVO}" style="width:28px; height:28px;" />
+                <div><b>Inativo</b></div>
+            </div>
+            </div>
+            """.format(
+                RADAR_ATIVO=_img_b64("icon/icone_radar_ativo.png"),
+                RADAR_INATIVO=_img_b64("icon/icone_radar_inativo.png"),
+            ),
+            unsafe_allow_html=True,
+        )
 
     # Persistir seleção entre interações
     if "equip_selecionado" not in st.session_state:
@@ -157,7 +212,12 @@ else:
 
     if equipamento_selecionado:
         st.info(f"✅ Equipamento selecionado: {equipamento_selecionado}")
-        st.info(f"✅ Período selecionado: {data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}")
+        if data_inicial and data_final:
+            st.info(
+                f"✅ Período selecionado: {data_inicial.strftime('%d/%m/%Y')} a {data_final.strftime('%d/%m/%Y')}"
+            )
+        else:
+            st.info("✅ Selecione o período (intervalo completo) no calendário da sidebar.")
 
         # Busca as infos do equipamento selecionado
         info_eq = equipamentos_validos[equipamentos_validos["id"] == equipamento_id].iloc[0]
