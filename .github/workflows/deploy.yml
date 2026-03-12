@@ -36,6 +36,7 @@ jobs:
           {
             "commands": [
               "set -eu",
+              "export HOME=/root",
               "test -d /opt/streamlit/app",
               "cd /opt/streamlit/app",
               "git config --global --add safe.directory /opt/streamlit/app",
