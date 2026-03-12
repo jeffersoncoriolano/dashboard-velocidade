@@ -1,126 +1,111 @@
-# 📊 Dashboard de Velocidades
+# Dashboard de Velocidades
 
-Painel interativo desenvolvido em **Python + Streamlit** para visualização e análise de velocidades de veículos registradas por equipamentos de fiscalização eletrônica.  
-O sistema se conecta a um banco de dados **MySQL (AWS RDS)** e permite explorar estatísticas, indicadores e gráficos de tráfego de forma intuitiva.
+Painel em `Python + Streamlit` para visualizar dados de velocidade, fluxo e inoperancia de equipamentos de fiscalizacao eletronica.
 
----
+Nesta versao, o dashboard **nao acessa mais o banco diretamente**. Ele consome a `mobilidade-api` por HTTP.
 
-## 🚀 Funcionalidades
+## Arquitetura
 
-- 🔎 **Seleção de período** via calendário interativo (filtro por intervalo de datas).  
-- 🗺️ **Mapa interativo** (Folium) com os equipamentos georreferenciados e status (ativo/inativo).  
-- 📈 **Indicadores em cards**:
-  - Velocidade regulamentada  
-  - Status do equipamento  
-  - Velocidade média, moda e máxima  
-  - Total de veículos lidos (OCR)  
-  - Fluxo total de veículos  
-  - Aproveitamento de OCR (%)  
-- 📊 **Gráficos dinâmicos** (Plotly):  
-  - Distribuição de velocidades (barras)  
-  - Percentuais abaixo/dentro/acima da tolerância (pizza)  
-  - Faixas de velocidade (bar chart horizontal)  
-- ⚠️ **Consulta de inoperâncias** de equipamentos (quando ficaram 25h ou mais sem registrar veículos).  
+- Frontend: `Streamlit`
+- Graficos: `Plotly`
+- Mapa: `Folium`
+- Fonte de dados: `mobilidade-api`
+- Autenticacao da API: header `X-API-Key`
 
----
+## O que o painel faz
 
-## 🖼️ Screenshots
+- carrega equipamentos georreferenciados no mapa
+- permite selecionar um equipamento pelo mapa
+- consulta inoperancia por periodo
+- monta distribuicao de velocidades
+- calcula indicadores e percentuais no proprio cliente
+- consulta fluxo total do equipamento pela API
 
-### Mapa interativo + seleção de equipamento
-![Mapa](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/mapa_interativo.png)
+## Dependencias principais
 
-### Indicadores de velocidade e status
-![Indicadores](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/indicadores_de_velocidade.png)
+- `streamlit`
+- `folium`
+- `streamlit-folium`
+- `pandas`
+- `plotly`
+- `python-dotenv`
+- `requests`
 
-### Distribuição das velocidades
-![Gráfico](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/distribuicao_de_velocidades.png)
+## Configuracao local
 
-### Excessos de velocidade
-![Gráfico](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/excessos_de_velocidade.png)
+Crie um `.env` na raiz do projeto com base em `.env.example`:
 
-### Faixas de velocidade
-![Fluxo](https://github.com/jeffersoncoriolano/dashboard-velocidade/blob/main/screenshots/faixas_de_velocidade.png)
+```env
+API_BASE_URL=http://127.0.0.1:8080/api
+API_KEY=sua-chave-da-api
+```
 
----
+Observacao:
+- `API_BASE_URL` deve apontar para a URL base da API, incluindo o prefixo `/api`
+- `API_KEY` deve ser a mesma chave configurada na `mobilidade-api`
 
-## 🛠️ Tecnologias utilizadas
+## Execucao local
 
-- **Linguagem:** Python 3.12  
-- **Framework web:** [Streamlit](https://streamlit.io/)  
-- **Visualizações:** Plotly, Folium  
-- **Banco de dados:** MySQL (AWS RDS)  
-- **Conexão:** PyMySQL + dotenv  
-- **Manipulação de dados:** Pandas, Numpy  
+1. Crie e ative uma virtualenv
 
----
+Windows PowerShell:
 
-## ⚙️ Instalação e uso local
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
 
-1. Clone este repositório:
+Linux / macOS:
+
 ```bash
-    git clone https://github.com/jeffersoncoriolano/dashboard-velocidade.git
-    cd dashboard-velocidade
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
-2. Crie e ative um ambiente virtual:
+2. Instale as dependencias
+
 ```bash
-    python3 -m venv .venv
-    source .venv/bin/activate   # Linux/Mac
-    .venv\Scripts\activate      # Windows (PowerShell)
+pip install -r requirements.txt
 ```
 
-3. Instale as dependências:
+3. Execute o dashboard
+
 ```bash
-    pip install -r requirements.txt
+streamlit run app.py
 ```
 
-4. Crie um arquivo .env na raiz do projeto com as credenciais do banco:
-```bash
-    DB_HOST=seu_host
-    DB_PORT=3306
-    DB_USER=seu_usuario
-    DB_PASSWORD=sua_senha
-    DB_NAME=seu_banco
+4. Acesse no navegador
+
+```text
+http://localhost:8501
 ```
 
-5. Execute o dashboard:
-```bash
-    streamlit run app.py
+## Estrutura do projeto
+
+```text
+dashboard-velocidade/
+|-- app.py
+|-- api_client.py
+|-- requirements.txt
+|-- .env.example
+|-- icon/
+|-- screenshots/
 ```
 
-6. Acesse no navegador:
-```bash
-    http://localhost:8501
-```
+## Observacoes de implementacao
 
----
+- O dashboard usa `nome_processador` para consultar o fluxo total do equipamento completo.
+- A distribuicao de velocidades continua sendo tratada no cliente para preservar os graficos e os cards atuais.
+- O endpoint de inoperancia da API aceita no maximo 31 dias por consulta.
 
-## ☁️ Deploy na AWS (produção)
+## Validacao esperada
 
-O sistema foi implantado em:
+Antes de considerar a migracao concluida, valide:
 
-- **Banco de dados**: Amazon RDS (MySQL).
-- **Aplicação**: Amazon EC2 (Ubuntu), rodando como serviço systemd e exposto via Nginx.
-- **Domínio customizado**: coriolano.app gerenciado pelo Cloudflare.
-
----
-
-## 📂 Estrutura do projeto
-   ```bash
-    dashboard-velocidade/
-    │── app.py              # Código principal do dashboard (Streamlit)
-    │── db_connector.py     # Conexão ao banco de dados (PyMySQL + dotenv)
-    │── queries.py          # Consultas SQL reutilizáveis
-    │── requirements.txt    # Dependências do projeto
-    │── icon/               # Ícones customizados para os marcadores no mapa
-    │── .env (local)        # Variáveis de ambiente (não versionado)
-```
-
----
-
-## 📜 Licença
-
-    Este projeto está sob a licença MIT.
-    Sinta-se livre para usar, modificar e distribuir.
-
----
+- mapa carregando equipamentos
+- selecao de equipamento pelo mapa
+- consulta de inoperancia
+- cards de velocidade
+- card de fluxo total
+- card de aproveitamento OCR
+- graficos de distribuicao, pizza e faixas

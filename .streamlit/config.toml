@@ -1,0 +1,9 @@
+[theme]
+base = "light"
+
+# O dashboard foi desenhado para fundo claro.
+# Forcar isso aqui evita que o Streamlit herde o tema do sistema/VS Code.
+primaryColor = "#005cb2"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f5f5f5"
+textColor = "#111827"
