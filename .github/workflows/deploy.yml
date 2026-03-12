@@ -1,8 +1,11 @@
-name: Deploy to EC2
+name: Deploy Dashboard via SSM
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
@@ -12,21 +15,94 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup SSH key
-        uses: webfactory/ssh-agent@v0.9.0
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          ssh-private-key: ${{ secrets.EC2_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: sa-east-1
 
-      - name: Deploy over SSH
+      - name: Send deploy command via SSM
+        id: ssm
+        shell: bash
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          DASHBOARD_API_BASE_URL: ${{ secrets.DASHBOARD_API_BASE_URL }}
+          DASHBOARD_API_KEY: ${{ secrets.DASHBOARD_API_KEY }}
         run: |
-            ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} '
-            set -e
-            cd /opt/streamlit/app
-            git fetch --all
-            git reset --hard origin/main
+          set -euo pipefail
 
-            # usa o pip DA VENV diretamente (sem precisar de "source")
-            /opt/streamlit/app/.venv/bin/pip install -r requirements.txt
+          cat > ssm-commands.json <<EOF
+          {
+            "commands": [
+              "set -eu",
+              "test -d /opt/streamlit/app",
+              "cd /opt/streamlit/app",
+              "git fetch --all",
+              "git reset --hard origin/main",
+              "cat > /opt/streamlit/app/.env <<'ENVFILE'",
+              "API_BASE_URL=${DASHBOARD_API_BASE_URL}",
+              "API_KEY=${DASHBOARD_API_KEY}",
+              "ENVFILE",
+              "/opt/streamlit/app/.venv/bin/pip install -r requirements.txt",
+              "sudo systemctl restart streamlit",
+              "i=0; while [ \$i -lt 20 ]; do if curl -fsS http://127.0.0.1:8501/velocidades/ >/dev/null; then exit 0; fi; i=\$((i+1)); sleep 2; done; echo 'dashboard healthcheck failed after retries'; exit 1"
+            ]
+          }
+          EOF
 
-            sudo systemctl restart streamlit
-            '
+          COMMAND_ID="$(
+            aws ssm send-command \
+              --instance-ids "${EC2_INSTANCE_ID}" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Deploy dashboard-velocidade via GitHub Actions" \
+              --parameters file://ssm-commands.json \
+              --query "Command.CommandId" \
+              --output text
+          )"
+
+          echo "command_id=${COMMAND_ID}" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for SSM command
+        shell: bash
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set +e
+          aws ssm wait command-executed \
+            --command-id "${{ steps.ssm.outputs.command_id }}" \
+            --instance-id "${EC2_INSTANCE_ID}"
+          WAIT_EXIT=$?
+          echo "wait_exit=${WAIT_EXIT}" >> "${GITHUB_OUTPUT}"
+          exit 0
+
+      - name: Show SSM command output
+        shell: bash
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          aws ssm get-command-invocation \
+            --command-id "${{ steps.ssm.outputs.command_id }}" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --query "{Status:Status,StdOut:StandardOutputContent,StdErr:StandardErrorContent}" \
+            --output json
+
+      - name: Fail if SSM command was not successful
+        shell: bash
+        env:
+          EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+        run: |
+          set -euo pipefail
+          STATUS="$(
+            aws ssm get-command-invocation \
+              --command-id "${{ steps.ssm.outputs.command_id }}" \
+              --instance-id "${EC2_INSTANCE_ID}" \
+              --query "Status" \
+              --output text
+          )"
+
+          if [ "${STATUS}" != "Success" ]; then
+            echo "SSM deploy failed with status: ${STATUS}"
+            exit 1
+          fi
