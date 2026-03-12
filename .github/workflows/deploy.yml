@@ -38,6 +38,7 @@ jobs:
               "set -eu",
               "test -d /opt/streamlit/app",
               "cd /opt/streamlit/app",
+              "git config --global --add safe.directory /opt/streamlit/app",
               "git fetch --all",
               "git reset --hard origin/main",
               "cat > /opt/streamlit/app/.env <<'ENVFILE'",
