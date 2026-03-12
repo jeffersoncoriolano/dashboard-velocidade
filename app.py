@@ -5,11 +5,10 @@ import pandas as pd
 import plotly.express as px
 import datetime
 from dotenv import load_dotenv
-from queries import *
-from db_connector import executar_consulta
 import locale
 import base64
 from pathlib import Path
+from api_client import APIClient
 
 def _img_b64(path: str) -> str:
     p = Path(path)
@@ -25,7 +24,16 @@ except:
 
 load_dotenv()
 
-st.set_page_config(layout="wide")
+try:
+    # O cliente HTTP encapsula autenticacao e formato das respostas da API.
+    # Se a configuracao estiver incompleta, o dashboard para logo no inicio
+    # com uma mensagem objetiva em vez de falhar em pontos aleatorios da tela.
+    api_client = APIClient()
+except RuntimeError as exc:
+    st.error(str(exc))
+    st.stop()
+
+st.set_page_config(page_title="Dashboard das Velocidades", layout="wide")
 st.title("📈 Dashboard das Velocidades")
 
 # >>> CSS para controle de impressão, quebras de página e tamanhos
@@ -65,8 +73,14 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Carregar equipamentos para o mapa (agora já traz status e velocidade regulamentada)
-equipamentos_df = executar_consulta(get_equipamentos())
+# Carregar equipamentos para o mapa (agora já traz status e velocidade regulamentada).
+# Se a API estiver indisponivel, a tela para aqui com uma mensagem objetiva.
+try:
+    equipamentos_df = api_client.get_equipamentos()
+except RuntimeError as exc:
+    st.error(str(exc))
+    st.stop()
+
 equipamentos_validos = equipamentos_df[
     (equipamentos_df['latitude'] != 0) & (equipamentos_df['longitude'] != 0)
 ]
@@ -115,11 +129,16 @@ with st.sidebar:
         if not (data_inicial and data_final):
             st.warning("Selecione o intervalo completo antes de consultar inoperâncias.")
         else:
-            params = {
-                "data_inicial": data_inicial.strftime("%Y-%m-%d"),
-                "data_final": data_final.strftime("%Y-%m-%d"),
-            }
-            df_inoperancia = executar_consulta(get_inoperancia(), params)
+            # A API ja carrega a regra de negocio de inoperancia.
+            # O dashboard so envia o periodo selecionado e exibe o retorno.
+            try:
+                df_inoperancia = api_client.get_inoperancia(
+                    data_ini=data_inicial.strftime("%Y-%m-%d"),
+                    data_fim=data_final.strftime("%Y-%m-%d"),
+                )
+            except RuntimeError as exc:
+                st.error(str(exc))
+                df_inoperancia = pd.DataFrame()
 
             if df_inoperancia is not None and not df_inoperancia.empty:
                 st.markdown("### Resultado de Inoperância no período selecionado")
@@ -256,20 +275,17 @@ else:
         pct_regulamentada = pct_dentro_tolerancia = pct_acima_tolerancia = 0.0
 
         if data_inicial and data_final and data_inicial <= data_final:
-            query = """
-                SELECT velocidade, COUNT(*) AS contagem
-                FROM dados_velocidade
-                WHERE equipamento = %(equipamento_id)s
-                  AND data BETWEEN %(data_inicial)s AND %(data_final)s
-                GROUP BY velocidade
-                ORDER BY velocidade
-            """
-            params = {
-                "equipamento_id": equipamento_id,
-                "data_inicial": data_inicial.strftime("%Y-%m-%d"),
-                "data_final": data_final.strftime("%Y-%m-%d"),
-            }
-            df_velocidade = executar_consulta(query, params)
+            # A distribuicao continua sendo tratada no cliente porque os
+            # graficos e cards ja dependem desse formato agregado.
+            try:
+                df_velocidade = api_client.get_distribuicao_velocidade(
+                    equipamento_id=equipamento_id,
+                    data_ini=data_inicial.strftime("%Y-%m-%d"),
+                    data_fim=data_final.strftime("%Y-%m-%d"),
+                )
+            except RuntimeError as exc:
+                st.error(str(exc))
+                df_velocidade = pd.DataFrame()
 
             if df_velocidade is None or df_velocidade.empty:
                 st.warning("Nenhum dado de velocidade encontrado para o período e equipamento selecionados.")
@@ -328,23 +344,21 @@ else:
                     )
 
         if data_inicial and data_final and data_inicial <= data_final:
-            # Consulta dados de fluxo
-            query_fluxo = get_fluxo(equipamento_selecionado, data_inicial, data_final)
+            # O fluxo total agora tambem vem da API, ja alinhado com a regra
+            # correta de somar volume_veiculos em dados_trafego.
+            try:
+                total_veiculos = api_client.get_fluxo(
+                    nome_processador=equipamento_selecionado,
+                    data_ini=data_inicial.strftime("%Y-%m-%d"),
+                    data_fim=data_final.strftime("%Y-%m-%d"),
+                )
+            except RuntimeError as exc:
+                st.error(str(exc))
+                total_veiculos = 0
 
-            params_fluxo = {
-                "nome_processador": equipamento_selecionado,
-                "data_inicial": data_inicial.strftime("%Y-%m-%d"),
-                "data_final": data_final.strftime("%Y-%m-%d"),
-            }
-
-            df_fluxo = executar_consulta(query_fluxo, params_fluxo)
-
-            # Validar None/empty e somar para obter número (evita Series)
-            if df_fluxo is None or df_fluxo.empty or df_fluxo["fluxo_total"].isnull().all():
-                st.warning("Nenhum dado de fluxo encontrado para o período e equipamento selecionados.")
+            if total_veiculos <= 0:
+                st.warning("Nenhum dado de fluxo encontrado para o per?odo e equipamento selecionados.")
             else:
-                total_veiculos = int(pd.to_numeric(df_fluxo['fluxo_total'], errors='coerce').fillna(0).sum())  
-
                 aproveitamento_ocr = 0.0  # inicializa
                 if total_veiculos > 0 and total_veiculos_ocr > 0:
                     aproveitamento_ocr = (total_veiculos_ocr / total_veiculos) * 100
